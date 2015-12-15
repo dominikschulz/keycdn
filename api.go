@@ -22,7 +22,6 @@ func New(key string) Client {
 	return Client{
 		apikey: key,
 		Base:   BaseURL,
-		http:   &http.Client{},
 	}
 }
 
@@ -71,6 +70,9 @@ func (z zoneResp) ToZone() Zone {
 		if err == nil {
 			zone.ID = id
 		}
+	}
+	if name, found := z["name"]; found {
+		zone.Name = name
 	}
 	// TODO fill out other fields as well
 	return zone
@@ -207,7 +209,7 @@ func (c Client) get(file string, args map[string]string) ([]byte, error) {
 		return []byte{}, err
 	}
 	req.SetBasicAuth(c.apikey, "")
-	resp, err := c.http.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return []byte{}, err
 	}
