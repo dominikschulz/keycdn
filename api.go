@@ -1,6 +1,7 @@
 package keycdn
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -197,6 +198,77 @@ func (c Client) Status(zoneID uint64, from, to time.Time) (map[string]uint64, er
 	return ret, nil
 }
 
+func (c Client) PurgeZoneCache(zoneID uint64) error {
+	zone := strconv.FormatUint(zoneID, 10)
+	b, err := c.get("/zones/purge/"+zone+".json", nil)
+	if err != nil {
+		return err
+	}
+	var resp response
+	err = json.Unmarshal(b, &resp)
+	if err != nil {
+		return err
+	}
+	if resp.Status != "success" {
+		return fmt.Errorf("Failed to purge Zone %d: %s", zoneID, resp.Description)
+	}
+	return nil
+}
+
+type URLs struct {
+	URLs []string `json:"urls"`
+}
+
+func (c Client) PurgeZoneURL(zoneID uint64, urls []string) error {
+	zones, err := c.Zones()
+	if err != nil {
+		return err
+	}
+	zone, found := zones[zoneID]
+	if !found {
+		return fmt.Errorf("Zone %d not found", zoneID)
+	}
+	// TODO check urls have the correct prefix
+	_ = zone
+	zID := strconv.FormatUint(zoneID, 10)
+	u := URLs{URLs: urls}
+	b, err := c.delete("/zones/purgeurl/"+zID+".json", u)
+	if err != nil {
+		return err
+	}
+	var resp response
+	err = json.Unmarshal(b, &resp)
+	if err != nil {
+		return err
+	}
+	if resp.Status != "success" {
+		return fmt.Errorf("Failed to purge Zone %d: %s", zoneID, resp.Description)
+	}
+	return nil
+}
+
+type Tags struct {
+	Tags []string `json:"tags"`
+}
+
+func (c Client) PurgeZoneTag(zoneID uint64, tags []string) error {
+	zID := strconv.FormatUint(zoneID, 10)
+	t := Tags{Tags: tags}
+	b, err := c.delete("/zones/purgetag/"+zID+".json", t)
+	if err != nil {
+		return err
+	}
+	var resp response
+	err = json.Unmarshal(b, &resp)
+	if err != nil {
+		return err
+	}
+	if resp.Status != "success" {
+		return fmt.Errorf("Failed to purge Zone %d: %s", zoneID, resp.Description)
+	}
+	return nil
+}
+
 func (c Client) get(file string, args map[string]string) ([]byte, error) {
 	vs := url.Values{}
 	for k, v := range args {
@@ -212,6 +284,28 @@ func (c Client) get(file string, args map[string]string) ([]byte, error) {
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return []byte{}, err
+	}
+	defer resp.Body.Close()
+	return ioutil.ReadAll(resp.Body)
+}
+
+func (c Client) delete(file string, body interface{}) ([]byte, error) {
+	url := c.Base + file
+
+	b, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("DELETE", url, bytes.NewBuffer(b))
+	if err != nil {
+		return nil, err
+	}
+	req.SetBasicAuth(c.apikey, "")
+	req.Header.Add("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
 	}
 	defer resp.Body.Close()
 	return ioutil.ReadAll(resp.Body)
