@@ -1,3 +1,4 @@
+// Package keycdn provides a simple client for the KeyCDN API
 package keycdn
 
 import (
@@ -11,14 +12,17 @@ import (
 	"time"
 )
 
+// BaseURL is the KeyCDN API endpoint
 const BaseURL = "https://api.keycdn.com"
 
+// Client is the API client
 type Client struct {
 	apikey string
 	Base   string
 	http   *http.Client
 }
 
+// New creates a new API client with the given API key
 func New(key string) Client {
 	return Client{
 		apikey: key,
@@ -31,6 +35,7 @@ type response struct {
 	Description string `json:"description"`
 }
 
+// Zone is a distribution zone/property
 type Zone struct {
 	ID                      uint64
 	Name                    string
@@ -64,6 +69,7 @@ type zonesResp struct {
 
 type zoneResp map[string]string
 
+// ToZone converts a zone response to a proper Zone object
 func (z zoneResp) ToZone() Zone {
 	zone := Zone{}
 	if idStr, found := z["id"]; found {
@@ -75,7 +81,7 @@ func (z zoneResp) ToZone() Zone {
 	if name, found := z["name"]; found {
 		zone.Name = name
 	}
-	// TODO fill out other fields as well
+	// TODO(dschulz) fill out other fields as well
 	return zone
 }
 
@@ -86,6 +92,7 @@ type stateStatResponse struct {
 
 type stateAmountResp map[string]string
 
+// Get is TODO(dschulz) undocumented
 func (s stateAmountResp) Get(key string) uint64 {
 	if v, found := s[key]; found {
 		iv, err := strconv.Atoi(v)
@@ -102,6 +109,7 @@ type trafficAmountResp struct {
 	Timestamp string `json:"timestamp"`
 }
 
+// Count is TODO(dschulz) undocumented
 func (t trafficAmountResp) Count() uint64 {
 	iv, err := strconv.Atoi(t.Amount)
 	if err != nil {
@@ -110,6 +118,7 @@ func (t trafficAmountResp) Count() uint64 {
 	return uint64(iv)
 }
 
+// Time is TODO(dschulz) undocumented
 func (t trafficAmountResp) Time() time.Time {
 	iv, err := strconv.Atoi(t.Timestamp)
 	if err != nil {
@@ -123,6 +132,7 @@ type trafficResponse struct {
 	Data map[string][]trafficAmountResp `json:"data"`
 }
 
+// Zones returns all the available zones
 func (c Client) Zones() (map[uint64]Zone, error) {
 	zones := make(map[uint64]Zone, 2)
 	b, err := c.get("/zones.json", map[string]string{})
@@ -144,6 +154,7 @@ func (c Client) Zones() (map[uint64]Zone, error) {
 	return zones, nil
 }
 
+// Traffic returns the traffic stats for a zone and interval
 func (c Client) Traffic(zoneID uint64, from, to time.Time) (uint64, error) {
 	args := make(map[string]string, 4)
 	args["zone_id"] = strconv.FormatUint(zoneID, 10)
@@ -154,7 +165,6 @@ func (c Client) Traffic(zoneID uint64, from, to time.Time) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	//fmt.Printf("Body: %s\n", b)
 	var tr trafficResponse
 	err = json.Unmarshal(b, &tr)
 	if err != nil {
@@ -165,13 +175,13 @@ func (c Client) Traffic(zoneID uint64, from, to time.Time) (uint64, error) {
 	}
 	var sum uint64
 	for _, a := range tr.Data["stats"] {
-		//fmt.Printf("TS: %s - Amount: %d\n", a.Time().Format(time.RFC3339), a.Count()/1024/1024)
 		sum += a.Count()
 	}
 	return sum, nil
 }
 
-func (c Client) Status(zoneID uint64, from, to time.Time) (map[string]uint64, error) {
+// Stats returns simple stats for the given zone and interval
+func (c Client) Stats(zoneID uint64, from, to time.Time) (map[string]uint64, error) {
 	ret := make(map[string]uint64, 4)
 	args := make(map[string]string, 4)
 	args["zone_id"] = strconv.FormatUint(zoneID, 10)
@@ -198,6 +208,7 @@ func (c Client) Status(zoneID uint64, from, to time.Time) (map[string]uint64, er
 	return ret, nil
 }
 
+// PurgeZoneCache will purge the given zone cache
 func (c Client) PurgeZoneCache(zoneID uint64) error {
 	zone := strconv.FormatUint(zoneID, 10)
 	b, err := c.get("/zones/purge/"+zone+".json", nil)
@@ -215,10 +226,12 @@ func (c Client) PurgeZoneCache(zoneID uint64) error {
 	return nil
 }
 
+// URLs is an URL list
 type URLs struct {
 	URLs []string `json:"urls"`
 }
 
+// PurgeZoneURL will purge a given list of URLs from a zone cache
 func (c Client) PurgeZoneURL(zoneID uint64, urls []string) error {
 	zones, err := c.Zones()
 	if err != nil {
@@ -247,10 +260,12 @@ func (c Client) PurgeZoneURL(zoneID uint64, urls []string) error {
 	return nil
 }
 
+// Tags is a set of tags
 type Tags struct {
 	Tags []string `json:"tags"`
 }
 
+// PurgeZoneTag will purge all tagged items from the zone
 func (c Client) PurgeZoneTag(zoneID uint64, tags []string) error {
 	zID := strconv.FormatUint(zoneID, 10)
 	t := Tags{Tags: tags}
